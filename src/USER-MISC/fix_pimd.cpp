@@ -233,8 +233,15 @@ void FixPIMD::final_integrate()
 
 void FixPIMD::post_force(int /*flag*/)
 {
-  for (int i=0; i<atom->nlocal; i++) for(int j=0; j<3; j++) atom->f[i][j] /= np;
+  int *mask = atom->mask;
 
+  for (int i=0; i<atom->nlocal; i++){
+    if (mask[i] & groupbit){
+        for (int j=0; j<3; j++)
+            atom->f[i][j] /= np;
+    }
+  }
+  
   comm_exec(atom->x);
   spring_force();
 
@@ -300,6 +307,7 @@ void FixPIMD::nhc_update_x()
   int n = atom->nlocal;
   double **x = atom->x;
   double **v = atom->v;
+  int *mask = atom->mask;
 
   if (method==CMD || method==NMPIMD)
   {
@@ -314,9 +322,11 @@ void FixPIMD::nhc_update_x()
 
   for (int i=0; i<n; i++)
   {
-    x[i][0] += dtv * v[i][0];
-    x[i][1] += dtv * v[i][1];
-    x[i][2] += dtv * v[i][2];
+    if (mask[i] & groupbit){
+        x[i][0] += dtv * v[i][0];
+        x[i][1] += dtv * v[i][1];
+        x[i][2] += dtv * v[i][2];
+    }
   }
 }
 
@@ -328,13 +338,16 @@ void FixPIMD::nhc_update_v()
   int *type = atom->type;
   double **v = atom->v;
   double **f = atom->f;
+  int *mask = atom->mask;
 
   for (int i=0; i<n; i++)
   {
-    double dtfm = dtf / mass[type[i]];
-    v[i][0] += dtfm * f[i][0];
-    v[i][1] += dtfm * f[i][1];
-    v[i][2] += dtfm * f[i][2];
+    if (mask[i] & groupbit){
+        double dtfm = dtf / mass[type[i]];
+        v[i][0] += dtfm * f[i][0];
+        v[i][1] += dtfm * f[i][1];
+        v[i][2] += dtfm * f[i][2];
+    }
   }
 
   t_sys = 0.0;
@@ -352,62 +365,64 @@ void FixPIMD::nhc_update_v()
   for (int i=0; i<nmax; i++)
   {
     int iatm = i/3;
-    int idim = i%3;
+    if (mask[iatm] & groupbit){
+        int idim = i%3;
+    
+        double *vv = v[iatm];
 
-    double *vv = v[iatm];
+        kecurrent = mass[type[iatm]] * vv[idim]* vv[idim] * force->mvv2e;
+        t_current = kecurrent / force->boltz;
 
-    kecurrent = mass[type[iatm]] * vv[idim]* vv[idim] * force->mvv2e;
-    t_current = kecurrent / force->boltz;
+        double *eta = nhc_eta[i];
+        double *eta_dot = nhc_eta_dot[i];
+        double *eta_dotdot = nhc_eta_dotdot[i];
 
-    double *eta = nhc_eta[i];
-    double *eta_dot = nhc_eta_dot[i];
-    double *eta_dotdot = nhc_eta_dotdot[i];
+        eta_dotdot[0] = (kecurrent - KT) / nhc_eta_mass[i][0];
 
-    eta_dotdot[0] = (kecurrent - KT) / nhc_eta_mass[i][0];
+        for(int ichain=nhc_nchain-1; ichain>0; ichain--)
+        {
+          expfac = exp(-dt8 * eta_dot[ichain+1]);
+          eta_dot[ichain] *= expfac;
+          eta_dot[ichain] += eta_dotdot[ichain] * dt4;
+          eta_dot[ichain] *= expfac;
+        }
 
-    for (int ichain=nhc_nchain-1; ichain>0; ichain--)
-    {
-      expfac = exp(-dt8 * eta_dot[ichain+1]);
-      eta_dot[ichain] *= expfac;
-      eta_dot[ichain] += eta_dotdot[ichain] * dt4;
-      eta_dot[ichain] *= expfac;
+        expfac = exp(-dt8 * eta_dot[1]);
+        eta_dot[0] *= expfac;
+        eta_dot[0] += eta_dotdot[0] * dt4;
+        eta_dot[0] *= expfac;
+    
+        // Update particle velocities half-step
+    
+        double factor_eta = exp(-dthalf * eta_dot[0]);
+        vv[idim] *= factor_eta;
+    
+        t_current *= (factor_eta * factor_eta);
+        kecurrent = force->boltz * t_current;
+        eta_dotdot[0] = (kecurrent - KT) / nhc_eta_mass[i][0];
+    
+        for(int ichain=0; ichain<nhc_nchain; ichain++)
+          eta[ichain] += dthalf * eta_dot[ichain];
+    
+        eta_dot[0] *= expfac;
+        eta_dot[0] += eta_dotdot[0] * dt4;
+        eta_dot[0] *= expfac;
+    
+        for(int ichain=1; ichain<nhc_nchain; ichain++)
+        {
+          expfac = exp(-dt8 * eta_dot[ichain+1]);
+          eta_dot[ichain] *= expfac;
+          eta_dotdot[ichain] = (nhc_eta_mass[i][ichain-1] * eta_dot[ichain-1] * eta_dot[ichain-1]
+                               - KT) / nhc_eta_mass[i][ichain];
+          eta_dot[ichain] += eta_dotdot[ichain] * dt4;
+          eta_dot[ichain] *= expfac;
+        }
+    
+        t_sys += t_current;
     }
-
-    expfac = exp(-dt8 * eta_dot[1]);
-    eta_dot[0] *= expfac;
-    eta_dot[0] += eta_dotdot[0] * dt4;
-    eta_dot[0] *= expfac;
-
-    // Update particle velocities half-step
-
-    double factor_eta = exp(-dthalf * eta_dot[0]);
-    vv[idim] *= factor_eta;
-
-    t_current *= (factor_eta * factor_eta);
-    kecurrent = force->boltz * t_current;
-    eta_dotdot[0] = (kecurrent - KT) / nhc_eta_mass[i][0];
-
-    for (int ichain=0; ichain<nhc_nchain; ichain++)
-      eta[ichain] += dthalf * eta_dot[ichain];
-
-    eta_dot[0] *= expfac;
-    eta_dot[0] += eta_dotdot[0] * dt4;
-    eta_dot[0] *= expfac;
-
-    for (int ichain=1; ichain<nhc_nchain; ichain++)
-    {
-      expfac = exp(-dt8 * eta_dot[ichain+1]);
-      eta_dot[ichain] *= expfac;
-      eta_dotdot[ichain] = (nhc_eta_mass[i][ichain-1] * eta_dot[ichain-1] * eta_dot[ichain-1]
-                           - KT) / nhc_eta_mass[i][ichain];
-      eta_dot[ichain] += eta_dotdot[ichain] * dt4;
-      eta_dot[ichain] *= expfac;
-    }
-
-    t_sys += t_current;
   }
 
-  t_sys /= nmax;
+  t_sys /= nmax; //!BH! This may need to change to 3*number of atoms in group instead of nmax
 }
 
 /* ----------------------------------------------------------------------
@@ -489,12 +504,17 @@ void FixPIMD::nmpimd_transform(double** src, double** des, double *vector)
 {
   int n = atom->nlocal;
   int m = 0;
+  int *mask = atom->mask;
 
-  for (int i=0; i<n; i++) for(int d=0; d<3; d++)
-  {
-    des[i][d] = 0.0;
-    for (int j=0; j<np; j++) { des[i][d] += (src[j][m] * vector[j]); }
-    m++;
+  for (int i=0; i<n; i++) {
+      for (int d=0; d<3; d++)
+      {
+        if (mask[i] & groupbit) {
+          des[i][d] = 0.0;
+          for(int j=0; j<np; j++) { des[i][d] += (src[j][m] * vector[j]); }
+        }
+        m++;
+      }
   }
 }
 
@@ -512,32 +532,38 @@ void FixPIMD::spring_force()
 
   double* xlast = buf_beads[x_last];
   double* xnext = buf_beads[x_next];
-
+  int *mask = atom->mask;
+  
+  virial = 0.0;
   for (int i=0; i<nlocal; i++)
   {
-    double delx1 = xlast[0] - x[i][0];
-    double dely1 = xlast[1] - x[i][1];
-    double delz1 = xlast[2] - x[i][2];
+    if (mask[i] & groupbit){
+        double delx1 = xlast[0] - x[i][0];
+        double dely1 = xlast[1] - x[i][1];
+        double delz1 = xlast[2] - x[i][2];
+        domain->minimum_image(delx1, dely1, delz1);
+    
+        double delx2 = xnext[0] - x[i][0];
+        double dely2 = xnext[1] - x[i][1];
+        double delz2 = xnext[2] - x[i][2];
+        domain->minimum_image(delx2, dely2, delz2);
+    
+        double ff = fbond * _mass[type[i]];
+    
+        double dx = delx1+delx2;
+        double dy = dely1+dely2;
+        double dz = delz1+delz2;
+   
+        virial = virial -0.5*(x[i][0]*f[i][0] + x[i][1]*f[i][1] + x[i][2]*f[i][2]);
+ 
+        f[i][0] -= (dx) * ff;
+        f[i][1] -= (dy) * ff;
+        f[i][2] -= (dz) * ff;
+
+        spring_energy += (dx*dx+dy*dy+dz*dz);
+    }
     xlast += 3;
-    domain->minimum_image(delx1, dely1, delz1);
-
-    double delx2 = xnext[0] - x[i][0];
-    double dely2 = xnext[1] - x[i][1];
-    double delz2 = xnext[2] - x[i][2];
     xnext += 3;
-    domain->minimum_image(delx2, dely2, delz2);
-
-    double ff = fbond * _mass[type[i]];
-
-    double dx = delx1+delx2;
-    double dy = dely1+dely2;
-    double dz = delz1+delz2;
-
-    f[i][0] -= (dx) * ff;
-    f[i][1] -= (dy) * ff;
-    f[i][2] -= (dz) * ff;
-
-    spring_energy += (dx*dx+dy*dy+dz*dz);
   }
 }
 

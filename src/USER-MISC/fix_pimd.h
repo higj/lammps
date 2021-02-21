@@ -106,6 +106,8 @@ class FixPIMD : public Fix {
   void nhc_init();
   void nhc_update_v();
   void nhc_update_x();
+
+  double virial;
 };
 
 
