@@ -122,7 +122,7 @@ FixPIMD::FixPIMD(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
 
   global_freq = 1;
   vector_flag = 1;
-  size_vector = 2;
+  size_vector = 3;
   extvector   = 1;
   comm_forward = 3;
 
@@ -335,6 +335,7 @@ void FixPIMD::nhc_update_x()
 void FixPIMD::nhc_update_v()
 {
   int n = atom->nlocal;
+  int ngroup = 0; //number of atoms in group
   int *type = atom->type;
   double **v = atom->v;
   double **f = atom->f;
@@ -347,6 +348,7 @@ void FixPIMD::nhc_update_v()
         v[i][0] += dtfm * f[i][0];
         v[i][1] += dtfm * f[i][1];
         v[i][2] += dtfm * f[i][2];
+	ngroup++;
     }
   }
 
@@ -422,7 +424,7 @@ void FixPIMD::nhc_update_v()
     }
   }
 
-  t_sys /= nmax; //!BH! This may need to change to 3*number of atoms in group instead of nmax
+  t_sys /= (3*ngroup); //evaluate temp only for group. 
 }
 
 /* ----------------------------------------------------------------------
@@ -871,5 +873,6 @@ double FixPIMD::compute_vector(int n)
 {
   if (n==0) { return spring_energy; }
   if (n==1) { return t_sys; }
+  if (n==2) { return virial; }
   return 0.0;
 }

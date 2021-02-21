@@ -358,6 +358,7 @@ void FixPIMDB::nhc_update_x()
 void FixPIMDB::nhc_update_v()
 {
   int n = atom->nlocal;
+  int ngroup = 0; //number of atoms in group
   int *type = atom->type;
   double **v = atom->v;
   double **f = atom->f;
@@ -370,6 +371,7 @@ void FixPIMDB::nhc_update_v()
         v[i][0] += dtfm * f[i][0];
         v[i][1] += dtfm * f[i][1];
         v[i][2] += dtfm * f[i][2];
+	ngroup++;
     }
   }
 
@@ -445,7 +447,7 @@ void FixPIMDB::nhc_update_v()
     }
   }
 
-  t_sys /= nmax; //!BH! This may need to change to 3*number of atoms in group instead of nmax
+  t_sys /= (3*ngroup); //evaluate temp only for group.
 }
 
 /* ----------------------------------------------------------------------
