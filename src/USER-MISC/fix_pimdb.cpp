@@ -583,30 +583,14 @@ std::vector<double> FixPIMDB::Evaluate_dEkn_on_atom(const int n, const int k, co
       atomnum == n-k ? (xlast+= 3*(k - 1)) : (xlast -= 3);
     }
 
-    //if (bead == np - 1 && k > 1) xnext += 3;
-    //if (bead == 0 && k > 1) xlast -= 3;
-
-    /*
-    if(bead==3 && n==1 && k==1) {
-      std::cout << "atom " << atomnum + 1 << ", bead" << bead + 1 << ": " << x[atomnum][0] << " " << x[atomnum][1] << " " << x[atomnum][2]
-                << std::endl;
-      std::cout << "next " << atomnum + 1 << ", bead" << bead + 1 << ": " << xnext[0] << " " << xnext[1] << " " << xnext[2]
-                << std::endl;
-    }*/
-
     std::vector<double> res(3);
-/*
-    std::cout<< "atom " << atomnum+1 << ", bead" << bead + 1 << ": " << x[atomnum][0] << " " << x[atomnum][1] << " " << x[atomnum][2] << std::endl;
-    std::cout<< "next " << atomnum+1 << ", bead" << bead + 1 << ": " << xnext[0] << " " << xnext[1] << " " << xnext[2] << std::endl;
-    std::cout<< "last " << atomnum+1 << ", bead" << bead + 1 << ": " << xlast[0] << " " << xlast[1] << " " << xlast[2] << std::endl;
-*/
+
     double delx1 = xnext[0] - x[atomnum][0];
     double dely1 = xnext[1] - x[atomnum][1];
     double delz1 = xnext[2] - x[atomnum][2];
     domain->minimum_image(delx1, dely1, delz1);
 
     double delx2 = xlast[0] - x[atomnum][0];
-    //std::cout<<  xnext[0] << std::endl;
     double dely2 = xlast[1] - x[atomnum][1];
     double delz2 = xlast[2] - x[atomnum][2];
     domain->minimum_image(delx2, dely2, delz2);
@@ -615,22 +599,10 @@ std::vector<double> FixPIMDB::Evaluate_dEkn_on_atom(const int n, const int k, co
     double dy = -1.0*(dely1 + dely2);
     double dz = -1.0*(delz1 + delz2);
 
-    //std::cout << delx << " " <<dely << " " <<  delz << std::endl;
-    //std::cout << _mass[type[i]] << " " << omega_sq << " " <<  delx*delx << std::endl;
     res.at(0) = _mass[type[atomnum]] * omega_sq * dx;
     res.at(1) = _mass[type[atomnum]] * omega_sq * dy;
     res.at(2) = _mass[type[atomnum]] * omega_sq * dz;
 
-    /*
-    if (atomnum == 0 && bead ==1){
-      std::cout << "atom " << atomnum+1 << ", bead" << bead + 1 << ", n" << n << ", k" << k <<":[ " << res.at(0) << " " << res.at(1) << " " << res.at(2) << "]" << std::endl;
-      std::cout << dx <<", " << dy <<", " <<dz <<std::endl;
-      std::cout<< "atom " <<  ": " << x[atomnum][0] << " " << x[atomnum][1] << " " << x[atomnum][2] << std::endl;
-      std::cout<< "next " <<  ": " << xnext[0] << " " << xnext[1] << " " << xnext[2] << std::endl;
-      std::cout<< "prev " <<  ": " << xlast[0] << " " << xlast[1] << " " << xlast[2] << std::endl;
-    }
-    */
-    
     return res;
   }
 
@@ -669,53 +641,24 @@ double FixPIMDB::Evaluate_Ekn(const int n, const int k)
   spring_energy = 0.0;
   for (int i = n-k; i < n ; ++i) {
 
-    /*if(bead==3 && n==2 && k==2) {
-        std::cout << "atom " << i + 1 << ", bead" << bead + 1 << ": " << x[i][0] << " " << x[i][1] << " " << x[i][2]
-                  << std::endl;
-        std::cout << "next " << i + 1 << ", bead" << bead + 1 << ": " << xnext[0] << " " << xnext[1] << " " << xnext[2]
-                  << std::endl;
-    }*/
-
     double delx = xnext[0] - x[i][0];
-    //std::cout<<  xnext[0] << std::endl;
     double dely = xnext[1] - x[i][1];
     double delz = xnext[2] - x[i][2];
 
     domain->minimum_image(delx, dely, delz);
 
     if (bead == np - 1 && i == n - 2) {
-      /*if(bead==3 && n==2 && k==2) {
-          std::cout<<"I AM HERE"<<std::endl;
-          std::cout << "next " << i + 1 << ", bead" << bead + 1 << ": " << xnext[0] << " " << xnext[1] << " " << xnext[2]
-                    << std::endl;
-      }*/
-      xnext = buf_beads[x_next];
 
-      /*if(bead==3 && n==2 && k==2) {
-          std::cout<<"NOW I AM HERE"<<std::endl;
-          std::cout << "next " << i + 1 << ", bead" << bead + 1 << ": " << xnext[0] << " " << xnext[1] << " " << xnext[2]
-                    << std::endl;
-      }*/
-      //std::cout<<bead<<std::endl;
-      //std::cout<<  xnext[0] << " " << xnext[1]<< " " << xnext[2] << std::endl;
+      xnext = buf_beads[x_next];
 
       xnext += 3*(n - k);
     } else xnext += 3;
 
-    //std::cout << delx << " " <<dely << " " <<  delz << std::endl;
-    //std::cout << _mass[type[i]] << " " << omega_sq << " " <<  delx*delx << std::endl;
     spring_energy += 0.5*_mass[type[i]]*omega_sq*(delx*delx + dely*dely + delz*delz);
 
   }
 
-  //double energy_all = 0.0;
-  //double energy_local = spring_energy;
   energy_local = spring_energy;
-  //double energy_local = 0.0;
-  //if(bead==0 && n==2 && k==2)
-      //std::cout<< universe->iworld << " " << spring_energy <<" " << energy_all <<std::endl;
-
-  //MPI_Allreduce(&spring_energy,&energy_local,1,MPI_DOUBLE,MPI_SUM,world);
 
   MPI_Allreduce(&energy_local,&energy_all,1,MPI_DOUBLE,MPI_SUM,universe->uworld);
 
@@ -738,7 +681,6 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
   double **x = atom->x;
 
   std::vector<std::vector<double>> dV_all(n, std::vector<double>(3,0.0));
-  //std::cout<<dV_all.at(0).size()<<std::endl;
 
   virial = 0.0;
   for (int atomnum = 0; atomnum < nbosons; ++atomnum) {
@@ -754,63 +696,15 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
           dV.at(m) = {0.0,0.0,0.0};
         }else{
 
-          //for (int k = 1; k < m + 1; ++k) {
           int count = m*(m-1)/2;
 
-	  //!BH! I had to add 0.5 below in order to not get sigma which is zero or inf for large systems
-          //double Elongest = 0.5*(save_E_kn.at(m*(m-1)/2)+V.at(m-1));
 	  double Elongest = std::min((Evaluate_Ekn(m,1)+V.at(m-1)), (Evaluate_Ekn(m,m)+V.at(0)));
-	  //double Elongest = save_E_kn.at(m*(m-1)/2);
-          //std::cout<<"Elongest: "<<Elongest<<std::endl;
-/*
-          for (int k = m; k > 0; --k) {
-
-            std::vector<double> dE_kn(3,0.0);
-
-            dE_kn = Evaluate_dEkn_on_atom(m,k,atomnum);
-
-            sig.at(0) += (dE_kn.at(0) + dV.at(m - k).at(0)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-            sig.at(1) += (dE_kn.at(1) + dV.at(m - k).at(1)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-            sig.at(2) += (dE_kn.at(2) + dV.at(m - k).at(2)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-
-            count++;
-
-
-          }
-
-
-
-          std::vector<double> num(3,0.0);
-          num.at(0) = Elongest-1.0/beta*log(sig.at(0));
-          num.at(1) = Elongest-1.0/beta*log(sig.at(1));
-          num.at(2) = Elongest-1.0/beta*log(sig.at(2));
-
-          //double  denom = -1.0/beta*log((double)m)+ V.at(m);
-
-
-          //std::cout<<m<<" "<<beta<<" "<<V.at(m)<<std::endl;
-          //std::cout<<"sig[0] is: " << sig[0] << " V.at(m) is: "<< V.at(m) <<std::endl;
-          //dV.at(m).at(0) = exp(-beta*(num.at(0)-denom));
-          //dV.at(m).at(1) = exp(-beta*(num.at(1)-denom));
-          //dV.at(m).at(2) = exp(-beta*(num.at(2)-denom));
-          double  sig_denom_m = (double)m*exp(-beta*V.at(m));
-          dV.at(m).at(0) = sig.at(0) / sig_denom_m;
-          dV.at(m).at(1) = sig.at(1) / sig_denom_m;
-          dV.at(m).at(2) = sig.at(2) / sig_denom_m;
-*/
-          //std::cout<<"m: " << m<<" beta: "<<beta <<" num[0]: " <<num.at(0)<<" denom: "<<denom<<std::endl;
-          //exit(1);
 
             for (int k = m; k > 0; --k) {
                 std::vector<double> dE_kn(3,0.0);
 
                 dE_kn = Evaluate_dEkn_on_atom(m,k,atomnum);
                 
-                /*if(1){ //(bead==0 && atomnum==1) {
-		  std::cout << atomnum+1 << " " << bead+1 <<" " << m <<  " " << k << " dEkn:[" << dE_kn.at(0) <<"," << dE_kn.at(1)<< "," << dE_kn.at(2) << "]"<< std::endl;
-		    //<<" V_k-m:" << V.at(m - k)* 2625.499638 << std::endl;
-		    }*/
-
                 sig.at(0) += (dE_kn.at(0) + dV.at(m - k).at(0)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
                 sig.at(1) += (dE_kn.at(1) + dV.at(m - k).at(1)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
                 sig.at(2) += (dE_kn.at(2) + dV.at(m - k).at(2)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
@@ -820,14 +714,7 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
             }
 
             double  sig_denom_m = (double)m*exp(-beta*(V.at(m)-Elongest));
-	    /*if(sig_denom_m ==0 || std::isnan(sig_denom_m) || std::isinf(sig_denom_m) || std::isnan(sig.at(0)) || std::isinf(sig.at(0))) {
-	      if (universe->iworld ==0){
-		std::cout << "m is: "<< m << " Elongest is: " << Elongest << " V.at(m-1) is " <<V.at(m-1)<< " beta is: " << beta << " sig_denom_m is: " <<sig_denom_m << std::endl;
-	      }
-	    }*/
 
-            //std::cout<<m<<" "<<beta<<" "<<V.at(m)<<std::endl;
-            //std::cout<<"sig[0] is: " <<sig.at(0)<<" sig_denom_m is: "<<sig_denom_m<<std::endl;
             dV.at(m).at(0) = sig.at(0) / sig_denom_m;
             dV.at(m).at(1) = sig.at(1) / sig_denom_m;
             dV.at(m).at(2) = sig.at(2) / sig_denom_m;
@@ -839,24 +726,14 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
 	      exit(0);
 	    }
 
-
         }
 
 
       }
 
-      
-      //std::cout <<"atom: " << atomnum+1 <<" bead: "<< bead+1 << " dV_N: " << universe->nworlds*dV.at(n).at(0)<<" "<< universe->nworlds*dV.at(n).at(1)<< " "<<universe->nworlds*dV.at(n).at(2) <<std::endl;
-      
-
-      //std::cout<<"index: " <<(atomnum)*np + (bead)<<std::endl;
       dV_all.at((atomnum)).at(0) = dV.at(n).at(0);
       dV_all.at((atomnum)).at(1) = dV.at(n).at(1);
       dV_all.at((atomnum)).at(2) = dV.at(n).at(2);
-
-      /*if(bead==0)
-          std::cout <<"atom: " << atomnum+1 <<" bead: "<< bead+1 << " fbefore: " << f[atomnum][0]<<" "<< f[atomnum][1]<< " "<<f[atomnum][2] <<std::endl;
-      */
 
       virial = virial -0.5*(x[atomnum][0]*f[atomnum][0] + x[atomnum][1]*f[atomnum][1] + x[atomnum][2]*f[atomnum][2]);
 
@@ -864,11 +741,7 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
       f[atomnum][1] -= dV.at(n).at(1);
       f[atomnum][2] -= dV.at(n).at(2);
 
-      /*if(bead==0)
-          std::cout <<"atom: " << atomnum+1 <<" bead: "<< bead+1 << " fafter: " << f[atomnum][0]<<" "<< f[atomnum][1]<< " "<<f[atomnum][2] <<std::endl;
-        */
   }
-
 
   return dV_all;
 
@@ -883,33 +756,19 @@ std::vector<double> FixPIMDB::Evaluate_VBn(std::vector <double>& V, const int n)
   int count = 0;
   for (int m = 1; m < n+1; ++m) {
     double sig_denom = 0.0;
-
     double Elongest=0.0;
-    //for (int k = 1; k < m+1; ++k) {
+
     Elongest = std::min((Evaluate_Ekn(m,1)+V.at(m-1)), (Evaluate_Ekn(m,m)+V.at(0)));
     for (int k = m; k > 0; --k) {
           double E_kn;
 
           E_kn = Evaluate_Ekn(m,k);
-          /*if(k==m){
-            //!BH! I had to add 0.5 below in order to not get sigma which is zero or inf for large systems
-	    Elongest = 0.5*(E_kn+V.at(m-1));
-	    //Elongest = E_kn;
-	    //Elongest = 0.5*E_kn;
-	    //Elongest = 0.5*(std::max(E_kn,V.at(m-1)));
-	  }*/
-            //std::cout<<"Elongest: "<<Elongest<<std::endl;
 
           sig_denom += exp(-beta*(E_kn + V.at(m-k)-Elongest));
-          //save_E_kn.push_back(E_kn);
+
           save_E_kn.at(count) = E_kn;
           count++;
-	  /*if(sig_denom ==0 || std::isnan(sig_denom) || std::isinf(sig_denom)) {
-	      if (universe->iworld ==0){
-              std::cout << "m is: "<<m << " k is: " <<k << " E_kn is: " << E_kn << " V.at(m-k) is: " << V.at(m - k) << " Elongest is: " << Elongest
-                        << " V.at(m-1) is " <<V.at(m-1)<< " beta is: " << beta << " sig_denom is: " <<sig_denom << std::endl;
-	      }
-          }*/
+
     }
 
     V.at(m) = Elongest-1.0/beta*log(sig_denom / (double)m);
@@ -919,9 +778,7 @@ std::vector<double> FixPIMDB::Evaluate_VBn(std::vector <double>& V, const int n)
                     << std::endl;}
           exit(0);
     }
-    //std::cout<< sig_denom << " " <<  log (sig_denom / (double)m) << " " << beta <<std::endl;
   }
-
 
   return save_E_kn;
 
@@ -934,106 +791,10 @@ void FixPIMDB::spring_force() {
     V.at(0) = 0.0;
     std::vector<std::vector<double>> dV(nbosons * universe->nworlds, std::vector<double>(3, 0.0));
 
-    //if(universe->iworld ==0)
-    //std::cout<<"replica\tn\tt_V[microsec]\tt_dV[microsec]"<<std::endl;
-
-    //auto start = std::chrono::high_resolution_clock::now();
     E_kn = Evaluate_VBn(V, nbosons);
-
-    //auto elapsed = std::chrono::high_resolution_clock::now() - start;
-    //long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
-    ////std::cout<<nlocal<<"\t"<<microseconds<<";"<<std::endl;
-
-    //auto start_d = std::chrono::high_resolution_clock::now();
     dV = Evaluate_dVBn(V,E_kn,nbosons);
-    //auto elapsed_d = std::chrono::high_resolution_clock::now() - start_d;
-    //long long microseconds_d = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_d).count();
-    ////std::cout<<nlocal<<"\t"<<microseconds_d<<";"<<std::endl;
-
-    //std::cout<<universe->iworld <<"\t"<<nlocal<<"\t"<<microseconds<<"\t"<<microseconds_d<<";"<<std::endl;
-
-
-    //PRINTING FOR DEBUGGING/
-/*
-    if(universe->iworld ==0) {
-      //std::cout<<nlocal<<"\t"<<microseconds<<"\t"<<microseconds_d<<";"<<std::endl;
-      for (double val : V)
-        std::cout << val << std::endl;
-      std::cout << "" << std::endl;
-      for (double val : E_kn)
-        std::cout << val << std::endl;
-      std::cout << "" << std::endl;
-
-      for(std::vector<double> vec: dV) {
-          std::cout << vec[0] <<" " <<vec[1] <<" " <<vec[2] <<std::endl;
-          std::cout << std::endl;
-      }
-
-    }
-*/
-
-    /*
-    int atomnum =1;
-    int beadnum =3;
-    if (universe->iworld ==beadnum) {
-      for (int m = 1; m < atom->nlocal + 1; ++m) {
-        for (int k = 1; k < m + 1; ++k) {
-          std::vector<double> dE = Evaluate_dEkn_on_atom(m, k, atomnum);
-          std::cout <<"atom " << atomnum+1 << " bead " << universe->iworld +1 << " n " << m << " k " << k << " " << dE.at(0) << " " << dE.at(1) << " " << dE.at(2) << std::endl;
-        }
-      }
-    }*/
-
-    //double E = Evaluate_Ekn(3,3);
-    //std::vector<double> dE = Evaluate_dEkn_on_atom(3,3,0);
 
 }
-
-/* ----------------------------------------------------------------------
- OLD spring_force!!!!!!!!!!!!!!!!!!!!!!
- ---------------------------------------------------------------------- */
-/*
-void FixPIMDB::spring_force()
-{
-  spring_energy = 0.0;
-
-  double **x = atom->x;
-  double **f = atom->f;
-  double* _mass = atom->mass;
-  int* type = atom->type;
-  int nlocal = atom->nlocal;
-
-  double* xlast = buf_beads[x_last];
-  double* xnext = buf_beads[x_next];
-
-  for(int i=0; i<nlocal; i++)
-  {
-    double delx1 = xlast[0] - x[i][0];
-    double dely1 = xlast[1] - x[i][1];
-    double delz1 = xlast[2] - x[i][2];
-    xlast += 3;
-    domain->minimum_image(delx1, dely1, delz1);
-
-    double delx2 = xnext[0] - x[i][0];
-    double dely2 = xnext[1] - x[i][1];
-    double delz2 = xnext[2] - x[i][2];
-    xnext += 3;
-    domain->minimum_image(delx2, dely2, delz2);
-
-    double ff = fbond * _mass[type[i]];
-
-    double dx = delx1+delx2;
-    double dy = dely1+dely2;
-    double dz = delz1+delz2;
-
-    f[i][0] -= (dx) * ff;
-    f[i][1] -= (dy) * ff;
-    f[i][2] -= (dz) * ff;
-
-    spring_energy += (dx*dx+dy*dy+dz*dz);
-  }
-}
-*/
 
 //FOR PRINTING ENERGIES AND POTENTIALS FOR PIMD-B
 void FixPIMDB::end_of_step() {
