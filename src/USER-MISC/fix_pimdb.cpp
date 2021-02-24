@@ -96,6 +96,8 @@ FixPIMDB::FixPIMDB(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
 
   E_kn = std::vector<double>((nbosons * (nbosons + 1) / 2),0.0);
   V = std::vector<double>((nbosons + 1),0.0);
+  atoms_list = std::vector<int>(nbosons, 0.0);
+  for( int i = 0; i < nbosons; i++ ) atoms_list.push_back( i ); //default = normal order
 
   int count = 0;
   int *mask = atom->mask;
@@ -569,39 +571,55 @@ std::vector<double> FixPIMDB::Evaluate_dEkn_on_atom(const int n, const int k, co
     //omega^2, could use fbond instead?
     double omega_sq = omega_np * omega_np;
 
-    //dE_n^(k)(R_n-k+1,...,R_n) is a function of k atoms
-    //But derivative if for atom atomnum
-    xnext += 3 * (atomnum);
-    xlast += 3 * (atomnum);
-
-    //np is total number of beads
-    if (bead == np - 1 && k > 1){
-      atomnum == n - 1 ? (xnext-= 3*(k - 1)) : (xnext += 3);
-    }
-
-    if (bead == 0 && k > 1){
-      atomnum == n-k ? (xlast+= 3*(k - 1)) : (xlast -= 3);
-    }
+    double delx1=0.0;
+    double dely1=0.0;
+    double delz1=0.0;
+    double delx2=0.0;
+    double dely2=0.0;
+    double delz2=0.0;
 
     std::vector<double> res(3);
-
-    double delx1 = xnext[0] - x[atomnum][0];
-    double dely1 = xnext[1] - x[atomnum][1];
-    double delz1 = xnext[2] - x[atomnum][2];
+    if(bead==np-1 && k>1 && atomnum!=n-1){
+      delx1 = xnext[3*atoms_list[atomnum+1]] - x[atoms_list[atomnum]][0];
+      dely1 = xnext[3*atoms_list[atomnum+1]+1] - x[atoms_list[atomnum]][1];
+      delz1 = xnext[3*atoms_list[atomnum+1]+2] - x[atoms_list[atomnum]][2];
+    }
+    else if(bead==np-1 && k>1 && atomnum==n-1){
+      delx1 = xnext[3*atoms_list[n-k]] - x[atoms_list[atomnum]][0];
+      dely1 = xnext[3*atoms_list[n-k]+1] - x[atoms_list[atomnum]][1];
+      delz1 = xnext[3*atoms_list[n-k]+2] - x[atoms_list[atomnum]][2];
+    }
+    else{
+      delx1 = xnext[3*atoms_list[atomnum]] - x[atoms_list[atomnum]][0];
+      dely1 = xnext[3*atoms_list[atomnum]+1] - x[atoms_list[atomnum]][1];
+      delz1 = xnext[3*atoms_list[atomnum]+2] - x[atoms_list[atomnum]][2];
+    }
     domain->minimum_image(delx1, dely1, delz1);
 
-    double delx2 = xlast[0] - x[atomnum][0];
-    double dely2 = xlast[1] - x[atomnum][1];
-    double delz2 = xlast[2] - x[atomnum][2];
+    if(bead==0 && k>1 && atomnum!=n-k){
+      delx2 = xlast[3*atoms_list[atomnum-1]] - x[atoms_list[atomnum]][0];
+      dely2 = xlast[3*atoms_list[atomnum-1]+1] - x[atoms_list[atomnum]][1];
+      delz2 = xlast[3*atoms_list[atomnum-1]+2] - x[atoms_list[atomnum]][2];
+    }
+    else if(bead==0 && k>1 && atomnum==n-k){
+      delx2 = xlast[3*atoms_list[n-1]] - x[atoms_list[atomnum]][0];
+      dely2 = xlast[3*atoms_list[n-1]+1] - x[atoms_list[atomnum]][1];
+      delz2 = xlast[3*atoms_list[n-1]+2] - x[atoms_list[atomnum]][2];
+    }
+    else{
+      delx2 = xlast[3*atoms_list[atomnum]] - x[atoms_list[atomnum]][0];
+      dely2 = xlast[3*atoms_list[atomnum]+1] - x[atoms_list[atomnum]][1];
+      delz2 = xlast[3*atoms_list[atomnum]+2] - x[atoms_list[atomnum]][2];
+    }
     domain->minimum_image(delx2, dely2, delz2);
 
     double dx = -1.0*(delx1 + delx2);
     double dy = -1.0*(dely1 + dely2);
     double dz = -1.0*(delz1 + delz2);
 
-    res.at(0) = _mass[type[atomnum]] * omega_sq * dx;
-    res.at(1) = _mass[type[atomnum]] * omega_sq * dy;
-    res.at(2) = _mass[type[atomnum]] * omega_sq * dz;
+    res.at(0) = _mass[type[atoms_list[atomnum]]] * omega_sq * dx;
+    res.at(1) = _mass[type[atoms_list[atomnum]]] * omega_sq * dy;
+    res.at(2) = _mass[type[atoms_list[atomnum]]] * omega_sq * dz;
 
     return res;
   }
@@ -622,6 +640,9 @@ double FixPIMDB::Evaluate_Ekn(const int n, const int k)
   int* type = atom->type;
   double energy_all = 0.0;
   double energy_local = 0.0;
+  double delx=0.0;
+  double dely=0.0;
+  double delz=0.0;
 
   //xnext is a pointer to first element of buf_beads[x_next].
   //See in FixPIMDB::comm_init() for the definition of x_next.
@@ -632,32 +653,28 @@ double FixPIMDB::Evaluate_Ekn(const int n, const int k)
   //omega^2, could use fbond instead?
   double omega_sq = omega_np*omega_np;
 
-  //E_n^(k)(R_n-k+1,...,R_n) is a function of k atoms
-  xnext += 3*(n-k);
-
-  //np is total number of beads
-  if(bead == np-1 && k > 1) xnext += 3;
-
   spring_energy = 0.0;
   for (int i = n-k; i < n ; ++i) {
-
-    double delx = xnext[0] - x[i][0];
-    double dely = xnext[1] - x[i][1];
-    double delz = xnext[2] - x[i][2];
+    if(bead==np-1 && k>1 && i<n-1){
+      delx =x[atoms_list[i]][0] - xnext[3*atoms_list[i+1]+0]; 
+      dely =x[atoms_list[i]][1] - xnext[3*atoms_list[i+1]+1]; 
+      delz =x[atoms_list[i]][2] - xnext[3*atoms_list[i+1]+2]; 
+    }
+    else if(bead==np-1 && i==n-1){
+      delx =x[atoms_list[i]][0] - xnext[3*atoms_list[n-k]+0]; 
+      dely =x[atoms_list[i]][1] - xnext[3*atoms_list[n-k]+1]; 
+      delz =x[atoms_list[i]][2] - xnext[3*atoms_list[n-k]+2]; 
+    }
+    else{
+      delx =x[atoms_list[i]][0] - xnext[3*atoms_list[i]+0]; 
+      dely =x[atoms_list[i]][1] - xnext[3*atoms_list[i]+1]; 
+      delz =x[atoms_list[i]][2] - xnext[3*atoms_list[i]+2]; 
+    }
 
     domain->minimum_image(delx, dely, delz);
-
-    if (bead == np - 1 && i == n - 2) {
-
-      xnext = buf_beads[x_next];
-
-      xnext += 3*(n - k);
-    } else xnext += 3;
-
     spring_energy += 0.5*_mass[type[i]]*omega_sq*(delx*delx + dely*dely + delz*delz);
-
   }
-
+  
   energy_local = spring_energy;
 
   MPI_Allreduce(&energy_local,&energy_all,1,MPI_DOUBLE,MPI_SUM,universe->uworld);
@@ -731,15 +748,15 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
 
       }
 
-      dV_all.at((atomnum)).at(0) = dV.at(n).at(0);
-      dV_all.at((atomnum)).at(1) = dV.at(n).at(1);
-      dV_all.at((atomnum)).at(2) = dV.at(n).at(2);
+      dV_all.at( atoms_list.at(atomnum) ).at(0) = dV.at(n).at(0);
+      dV_all.at( atoms_list.at(atomnum) ).at(1) = dV.at(n).at(1);
+      dV_all.at( atoms_list.at(atomnum) ).at(2) = dV.at(n).at(2);
 
       virial = virial -0.5*(x[atomnum][0]*f[atomnum][0] + x[atomnum][1]*f[atomnum][1] + x[atomnum][2]*f[atomnum][2]);
 
-      f[atomnum][0] -= dV.at(n).at(0);
-      f[atomnum][1] -= dV.at(n).at(1);
-      f[atomnum][2] -= dV.at(n).at(2);
+      f[ atoms_list.at(atomnum) ][0] -= dV.at(n).at(0);
+      f[ atoms_list.at(atomnum) ][1] -= dV.at(n).at(1);
+      f[ atoms_list.at(atomnum) ][2] -= dV.at(n).at(2);
 
   }
 

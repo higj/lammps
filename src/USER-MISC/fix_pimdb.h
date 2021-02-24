@@ -115,6 +115,7 @@ class FixPIMDB : public Fix {
 
   std::vector<double> E_kn;
   std::vector<double> V;
+  std::vector<int> atoms_list;
   double virial;
   int nbosons;
 
