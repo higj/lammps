@@ -37,6 +37,7 @@
 #include "memory.h"
 #include "error.h"
 #include <algorithm> 
+#include <random>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -54,6 +55,7 @@ FixPIMDB::FixPIMDB(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
   sp         = 1.0;
   nevery     = 100;
   nbosons    = atom->nlocal;
+  seed_shuffle =  0;
 
   for(int i=3; i<narg-1; i+=2)
   {
@@ -86,18 +88,31 @@ FixPIMDB::FixPIMDB(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
     }
     else if(strcmp(arg[i],"nbosons")==0)
     {
-      fprintf(screen,"WARNING: USING nbosons IN THE INPUT ASSUMES THAT THEY ARE FIRST! 1,...,nbosons\n");
-      fprintf(logfile,"WARNING: USING nbosons IN THE INPUT ASSUMES THAT THEY ARE FIRST! 1,...,nbosons\n");
+      if(universe->me==0 && screen) fprintf(screen,"WARNING: USING nbosons IN THE INPUT ASSUMES THAT THEY ARE FIRST! 1,...,nbosons\n");
+      if(universe->me==0) fprintf(logfile,"WARNING: USING nbosons IN THE INPUT ASSUMES THAT THEY ARE FIRST! 1,...,nbosons\n");
       nbosons = atoi(arg[i+1]);
       if(nbosons<2 || nbosons>atom->nlocal) error->universe_all(FLERR,"Invalid nbosons value for fix pimd-B");
+    }
+    else if(strcmp(arg[i], "shuffle")==0)
+    {
+      freq_shuffle = atoi(arg[i+1]);
+      seed_shuffle = atoi(arg[i+2]);
+      fprintf(logfile,"Shuffle is ON with seed %d and freq %d\n", seed_shuffle, freq_shuffle);
     }
     else error->universe_all(arg[i],i+1,"Unkown keyword for fix pimd-B");
   }
 
   E_kn = std::vector<double>((nbosons * (nbosons + 1) / 2),0.0);
   V = std::vector<double>((nbosons + 1),0.0);
-  atoms_list = std::vector<int>(nbosons, 0.0);
   for( int i = 0; i < nbosons; i++ ) atoms_list.push_back( i ); //default = normal order
+  
+  /*std::cout<<"normal order: ";
+  for( int x: atoms_list) std::cout<< x;
+  std::cout<<"\n";
+  if(seed_shuffle) shuffle_atoms_list(atoms_list);
+  std::cout<<"shuffled: ";
+  for( int x: atoms_list) std::cout<< x;
+  std::cout<<"\n";*/
 
   int count = 0;
   int *mask = atom->mask;
@@ -234,7 +249,7 @@ void FixPIMDB::init()
 void FixPIMDB::setup(int vflag)
 {
   if(universe->me==0 && screen) fprintf(screen,"Setting up Path-Integral ...\n");
-
+  
   post_force(vflag);
   end_of_step();
 }
@@ -266,6 +281,17 @@ void FixPIMDB::post_force(int /*flag*/)
             atom->f[i][j] /= np;
     }
   }
+
+  //shuffle atoms_list for spring force evaluation
+  if(seed_shuffle && update->ntimestep%freq_shuffle==0 && update->ntimestep!=0) 
+    {
+      shuffle_atoms_list(atoms_list);
+      std::cout<<"shuffled: ";
+      for( int x: atoms_list) std::cout<< x;
+      std::cout<<"\n";
+    }
+
+  if(universe->me==0 && screen) fprintf(screen,"Setting up Path-Integral ...\n");
 
   comm_exec(atom->x);
   spring_force();
@@ -546,6 +572,14 @@ void FixPIMDB::nmpimd_transform(double** src, double** des, double *vector)
 }
 
 /* ---------------------------------------------------------------------- */
+void FixPIMDB::shuffle_atoms_list(std::vector<int>& list)
+{
+
+  std::shuffle(list.begin(), list.end(), std::default_random_engine(seed_shuffle));
+
+}
+
+/* ---------------------------------------------------------------------- */
 
 //dE_n^(k) is a function of k atoms (R_n-k+1,...,R_n) for a given n and k.
 std::vector<double> FixPIMDB::Evaluate_dEkn_on_atom(const int n, const int k, const int atomnum)
@@ -748,15 +782,16 @@ FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> 
 
       }
 
-      dV_all.at( atoms_list.at(atomnum) ).at(0) = dV.at(n).at(0);
-      dV_all.at( atoms_list.at(atomnum) ).at(1) = dV.at(n).at(1);
-      dV_all.at( atoms_list.at(atomnum) ).at(2) = dV.at(n).at(2);
+      int atom_ind = atoms_list.at(atomnum);
+      dV_all.at( atom_ind ).at(0) = dV.at(n).at(0);
+      dV_all.at( atom_ind ).at(1) = dV.at(n).at(1);
+      dV_all.at( atom_ind ).at(2) = dV.at(n).at(2);
 
-      virial = virial -0.5*(x[atomnum][0]*f[atomnum][0] + x[atomnum][1]*f[atomnum][1] + x[atomnum][2]*f[atomnum][2]);
+      virial = virial -0.5*(x[atom_ind][0]*f[atom_ind][0] + x[atom_ind][1]*f[atom_ind][1] + x[atom_ind][2]*f[atom_ind][2]);
 
-      f[ atoms_list.at(atomnum) ][0] -= dV.at(n).at(0);
-      f[ atoms_list.at(atomnum) ][1] -= dV.at(n).at(1);
-      f[ atoms_list.at(atomnum) ][2] -= dV.at(n).at(2);
+      f[ atom_ind ][0] -= dV.at(n).at(0);
+      f[ atom_ind ][1] -= dV.at(n).at(1);
+      f[ atom_ind ][2] -= dV.at(n).at(2);
 
   }
 

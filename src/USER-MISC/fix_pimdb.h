@@ -66,6 +66,7 @@ class FixPIMDB : public Fix {
   std::vector<double> Evaluate_dEkn_on_atom(const int n, const int k, const int atomnum);
   std::vector<double> Evaluate_VBn(std::vector <double>& V, const int n);
   std::vector<std::vector<double>> Evaluate_dVBn(const std::vector <double>& V, const std::vector <double>& save_E_kn, const int n);
+  void shuffle_atoms_list(std::vector<int>& list);
 
   /* fictious mass */
 
@@ -117,7 +118,9 @@ class FixPIMDB : public Fix {
   std::vector<double> V;
   std::vector<int> atoms_list;
   double virial;
-  int nbosons;
+  int nbosons; 
+  int seed_shuffle;
+  int freq_shuffle;
 
 };
 
