@@ -98,6 +98,7 @@ FixPIMDB::FixPIMDB(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
       freq_shuffle = atoi(arg[i+1]);
       seed_shuffle = atoi(arg[i+2]);
       fprintf(logfile,"Shuffle is ON with seed %d and freq %d\n", seed_shuffle, freq_shuffle);
+      rng = std::default_random_engine(seed_shuffle);
     }
     else error->universe_all(arg[i],i+1,"Unkown keyword for fix pimd-B");
   }
@@ -286,9 +287,11 @@ void FixPIMDB::post_force(int /*flag*/)
   if(seed_shuffle && update->ntimestep%freq_shuffle==0 && update->ntimestep!=0) 
     {
       shuffle_atoms_list(atoms_list);
+      if(universe->me==0){
       std::cout<<"shuffled: ";
       for( int x: atoms_list) std::cout<< x;
       std::cout<<"\n";
+      }
     }
 
   if(universe->me==0 && screen) fprintf(screen,"Setting up Path-Integral ...\n");
@@ -574,9 +577,7 @@ void FixPIMDB::nmpimd_transform(double** src, double** des, double *vector)
 /* ---------------------------------------------------------------------- */
 void FixPIMDB::shuffle_atoms_list(std::vector<int>& list)
 {
-
-  std::shuffle(list.begin(), list.end(), std::default_random_engine(seed_shuffle));
-
+  std::shuffle(list.begin(), list.end(), rng);
 }
 
 /* ---------------------------------------------------------------------- */

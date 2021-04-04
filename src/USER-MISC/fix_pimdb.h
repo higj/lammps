@@ -122,6 +122,10 @@ class FixPIMDB : public Fix {
   int seed_shuffle;
   int freq_shuffle;
 
+  //random number generator for shuffle
+  std::default_random_engine rng;
+
+
 };
 
 
