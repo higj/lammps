@@ -671,7 +671,7 @@ double FixPIMDB::Evaluate_Ekn(const int n, const int k)
 
 }
 
-void updateEtilde(const int n) {
+void FixPIMDB::updateEtilde(const int n) {
     E_tilde = std::min((getEkn(n, 1) + V[n - 1]), (getEkn(n, n) + V[0]));
 }
 
