@@ -205,7 +205,7 @@ void FixPIMDB::init()
   const double Plank     = force->hplanck;
 
   double hbar   = Plank / ( 2.0 * M_PI );
-  double beta   = 1.0 / (Boltzmann * nhc_temp);
+  beta = 1.0 / (Boltzmann * nhc_temp);
   double _fbond = 1.0 * np / (beta*beta*hbar*hbar) ;
 
   omega_np = sqrt(np) / (hbar * beta) * sqrt(force->mvv2e);
@@ -671,116 +671,114 @@ double FixPIMDB::Evaluate_Ekn(const int n, const int k)
 
 }
 
-std::vector<std::vector<double>>
-FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> &save_E_kn, const int n) {
+void updateEtilde(const int n) {
+    E_tilde = std::min((getEkn(n, 1) + V[n - 1]), (getEkn(n, n) + V[0]));
+}
 
-  const double Boltzmann = force->boltz;
-  double beta   = 1.0 / (Boltzmann * nhc_temp);
-  int bead = universe->iworld;
-  double **f = atom->f;
-  double **x = atom->x;
+std::vector<std::vector<double>> FixPIMDB::Evaluate_dVBn(const std::vector<double> &V, const std::vector<double> &save_E_kn, const int n) {
+    int bead = universe->iworld;
+    double **f = atom->f;
+    double **x = atom->x;
 
-  std::vector<std::vector<double>> dV_all(n, std::vector<double>(3,0.0));
+    std::vector<std::vector<double>> dV_all(n, std::vector<double>(3, 0.0));
 
-  virial = 0.0;
-  for (int atomnum = 0; atomnum < nbosons; ++atomnum) {
+    virial = 0.0;
+    
+    for (int atomnum = 0; atomnum < nbosons; ++atomnum) {
 
-      std::vector<std::vector<double>> dV(n+1, std::vector<double>(3,0.0));
-      dV.at(0) = {0.0,0.0,0.0};
+        std::vector<std::vector<double>> dV(n + 1, std::vector<double>(3, 0.0));
+        dV[0] = {0.0, 0.0, 0.0};
 
-      for (int m = 1; m < n + 1; ++m) {
+        for (int m = 1; m < n + 1; ++m) {
+            std::vector<double> sig(3, 0.0);
+            
+            if (atomnum > m-1) {
+                dV[m] = {0.0, 0.0, 0.0};
+            } else {
+                int count = m * (m - 1) / 2;
 
-        std::vector<double> sig(3,0.0);
+                updateEtilde(m);
 
-        if (atomnum > m-1) {
-          dV.at(m) = {0.0,0.0,0.0};
-        }else{
+                for (int k = m; k > 0; --k) {
+                    std::vector<double> dE_kn(3, 0.0);
 
-          int count = m*(m-1)/2;
+                    dE_kn = Evaluate_dEkn_on_atom(m, k, atomnum);
 
-	  double Elongest = std::min((Evaluate_Ekn(m,1)+V.at(m-1)), (Evaluate_Ekn(m,m)+V.at(0)));
+                    double exp_term = exp(-beta * (save_E_kn[count] + V[m - k] - E_tilde));
 
-            for (int k = m; k > 0; --k) {
-                std::vector<double> dE_kn(3,0.0);
+                    sig[0] += (dE_kn[0] + dV[m - k][0]) * exp_term;
+                    sig[1] += (dE_kn[1] + dV[m - k][1]) * exp_term;
+                    sig[2] += (dE_kn[2] + dV[m - k][2]) * exp_term;
 
-                dE_kn = Evaluate_dEkn_on_atom(m,k,atomnum);
+                    count++;
+                }
                 
-                sig.at(0) += (dE_kn.at(0) + dV.at(m - k).at(0)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-                sig.at(1) += (dE_kn.at(1) + dV.at(m - k).at(1)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-                sig.at(2) += (dE_kn.at(2) + dV.at(m - k).at(2)) * exp(-beta * (save_E_kn.at(count) + V.at(m - k)-Elongest));
-
-                count++;
-
+                double sig_denom_m = m * exp(-beta * (V[m] - E_tilde));
+                
+                dV[m][0] = sig[0] / sig_denom_m;
+                dV[m][1] = sig[1] / sig_denom_m;
+                dV[m][2] = sig[2] / sig_denom_m;
+                
+                if(std::isinf(dV[m][0]) || std::isnan(dV[m][0])) {
+                    if (universe->iworld ==0) {
+                        std::cout << "sig_denom_m is: " << sig_denom_m << " E_tilde is: " << E_tilde << " V[m] is " 
+                            << V[m] << " beta is " << beta << std::endl;
+                    }
+                    exit(0);
+                }
             }
+        }
 
-            double  sig_denom_m = (double)m*exp(-beta*(V.at(m)-Elongest));
+        dV_all[atomnum][0] = dV[n][0];
+        dV_all[atomnum][1] = dV[n][1];
+        dV_all[atomnum][2] = dV[n][2];
 
-            dV.at(m).at(0) = sig.at(0) / sig_denom_m;
-            dV.at(m).at(1) = sig.at(1) / sig_denom_m;
-            dV.at(m).at(2) = sig.at(2) / sig_denom_m;
+        virial = virial - 0.5 * (x[atomnum][0] * f[atomnum][0] + x[atomnum][1] * f[atomnum][1] + x[atomnum][2] * f[atomnum][2]);
 
-	    if(std::isinf(dV.at(m).at(0)) || std::isnan(dV.at(m).at(0))) {
-	      if (universe->iworld ==0){
-		std::cout << "sig_denom_m is: " << sig_denom_m << " Elongest is: " << Elongest
-			  << " V.at(m) is " << V.at(m) << " beta is " << beta << std::endl;}
-	      exit(0);
-	    }
+        f[atomnum][0] -= dV[n][0];
+        f[atomnum][1] -= dV[n][1];
+        f[atomnum][2] -= dV[n][2];
+
+    }
+    
+    return dV_all;
+}
+
+/*
+* Evaluate VB_n, n={0,...,N}. VB_0 is zero by definition.
+* Evaluation of each VB_n is done using Eq. 1 of arXiv:1905.09053 (SI).
+* Returns all VB_n.
+*/
+std::vector<double> FixPIMDB::Evaluate_VBn(std::vector <double>& V, const int n) {
+    std::vector<double> save_E_kn(n * (n + 1) / 2);
+
+    int count = 0;
+    for (int m = 1; m < n + 1; ++m) {
+        double sig_denom = 0.0;
+
+        updateEtilde(m);
+
+        for (int k = m; k > 0; --k) {
+            double E_kn = Evaluate_Ekn(m, k);
+
+            sig_denom += exp(-beta * (E_kn + V[m - k] - E_tilde));
+
+            save_E_kn[count] = E_kn;
+            count++;
 
         }
 
-
-      }
-
-      dV_all.at((atomnum)).at(0) = dV.at(n).at(0);
-      dV_all.at((atomnum)).at(1) = dV.at(n).at(1);
-      dV_all.at((atomnum)).at(2) = dV.at(n).at(2);
-
-      virial = virial -0.5*(x[atomnum][0]*f[atomnum][0] + x[atomnum][1]*f[atomnum][1] + x[atomnum][2]*f[atomnum][2]);
-
-      f[atomnum][0] -= dV.at(n).at(0);
-      f[atomnum][1] -= dV.at(n).at(1);
-      f[atomnum][2] -= dV.at(n).at(2);
-
-  }
-
-  return dV_all;
-
-}
-
-std::vector<double> FixPIMDB::Evaluate_VBn(std::vector <double>& V, const int n)
-{
-  const double Boltzmann = force->boltz;
-  double beta   = 1.0 / (Boltzmann * nhc_temp);
-  std::vector<double> save_E_kn(n*(n+1)/2);
-
-  int count = 0;
-  for (int m = 1; m < n+1; ++m) {
-    double sig_denom = 0.0;
-    double Elongest=0.0;
-
-    Elongest = std::min((Evaluate_Ekn(m,1)+V.at(m-1)), (Evaluate_Ekn(m,m)+V.at(0)));
-    for (int k = m; k > 0; --k) {
-          double E_kn;
-
-          E_kn = Evaluate_Ekn(m,k);
-
-          sig_denom += exp(-beta*(E_kn + V.at(m-k)-Elongest));
-
-          save_E_kn.at(count) = E_kn;
-          count++;
-
+        V[m] = E_tilde - 1.0 / beta * log(sig_denom / m);
+        
+        if(std::isinf(V[m]) || std::isnan(V[m])) {
+            if (universe->iworld ==0) {
+                std::cout << "sig_denom is: " << sig_denom << " E_tilde is: " << E_tilde << std::endl;
+            }
+            exit(0);
+        }
     }
 
-    V.at(m) = Elongest-1.0/beta*log(sig_denom / (double)m);
-    if(std::isinf(V.at(m)) || std::isnan(V.at(m))) {
-	if (universe->iworld ==0){
-          std::cout << "sig_denom is: " << sig_denom << " Elongest is: " << Elongest
-                    << std::endl;}
-          exit(0);
-    }
-  }
-
-  return save_E_kn;
+    return save_E_kn;
 
 }
 
@@ -788,11 +786,11 @@ std::vector<double> FixPIMDB::Evaluate_VBn(std::vector <double>& V, const int n)
 
 void FixPIMDB::spring_force() {
 
-    V.at(0) = 0.0;
+    V[0] = 0.0;
     std::vector<std::vector<double>> dV(nbosons * universe->nworlds, std::vector<double>(3, 0.0));
 
     E_kn = Evaluate_VBn(V, nbosons);
-    dV = Evaluate_dVBn(V,E_kn,nbosons);
+    dV = Evaluate_dVBn(V, E_kn, nbosons);
 
 }
 
@@ -805,9 +803,9 @@ void FixPIMDB::end_of_step() {
       std::ofstream myfile;
       myfile.open ("pimdb.log", std::ios::out | std::ios::app);
 
-      for (double val: E_kn)
+      for (double const &val : E_kn)
         myfile << val << " ";
-      for (double val: V)
+      for (double const &val : V)
         myfile << val << " "; // mult by 2625.499638 to go from Ha to kcal/mol
       myfile << std::endl;
 

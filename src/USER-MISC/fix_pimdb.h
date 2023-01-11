@@ -113,6 +113,10 @@ class FixPIMDB : public Fix {
   void nhc_update_v();
   void nhc_update_x();
 
+  double beta, E_tilde;
+
+  void updateEtilde(const int n);
+
   std::vector<double> E_kn;
   std::vector<double> V;
   double virial;
