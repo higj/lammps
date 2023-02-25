@@ -735,6 +735,12 @@ std::vector<std::vector<double>> FixPIMDB::Evaluate_dVBn(const std::vector<doubl
 
         virial = virial - 0.5 * (x[atomnum][0] * f[atomnum][0] + x[atomnum][1] * f[atomnum][1] + x[atomnum][2] * f[atomnum][2]);
 
+        /*
+        std::cout << "Atom " << atomnum << ", Bead " << bead << ": x=" << x[atomnum][0] << ", y=" << x[atomnum][1] << std::endl;
+        std::cout << "Atom " << atomnum << ", Bead " << bead << ": fx=" << f[atomnum][0] << ", fy=" << f[atomnum][1] << std::endl;
+        std::cout << "np is " << np << std::endl;
+        */
+
         f[atomnum][0] -= dV[n][0];
         f[atomnum][1] -= dV[n][1];
         f[atomnum][2] -= dV[n][2];
@@ -796,6 +802,7 @@ void FixPIMDB::spring_force() {
 
 //FOR PRINTING ENERGIES AND POTENTIALS FOR PIMD-B
 void FixPIMDB::end_of_step() {
+    //std::cout << "Virial after summing over " << nbosons << " atoms (at bead #" << universe->iworld << "): " << virial << std::endl;
 
     if (universe->iworld == 0) {
     //std::cout << "E1\tE12\tE2\tE123\tE23\tE3\tVB0\tVB1\tVB2\tVB3" <<std::endl;

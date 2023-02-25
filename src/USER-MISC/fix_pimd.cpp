@@ -397,7 +397,7 @@ void FixPIMD::nhc_update_v()
         // Update particle velocities half-step
     
         double factor_eta = exp(-dthalf * eta_dot[0]);
-        vv[idim] *= factor_eta;
+        //vv[idim] *= factor_eta; // Uncomment this line to enable NH thermostat (15.2.23). Disabled for energy conservation check.
     
         t_current *= (factor_eta * factor_eta);
         kecurrent = force->boltz * t_current;
@@ -555,14 +555,15 @@ void FixPIMD::spring_force()
         double dx = delx1+delx2;
         double dy = dely1+dely2;
         double dz = delz1+delz2;
-   
-        virial = virial -0.5*(x[i][0]*f[i][0] + x[i][1]*f[i][1] + x[i][2]*f[i][2]);
+
+        virial += -0.5 * (x[i][0] * f[i][0] + x[i][1] * f[i][1] + x[i][2] * f[i][2]);
  
         f[i][0] -= (dx) * ff;
         f[i][1] -= (dy) * ff;
         f[i][2] -= (dz) * ff;
 
-        spring_energy += (delx2*delx2+dely2*dely2+delz2*delz2);
+        // Bug fix (15.2.23); Negative sign is due to ff which is negative (because fbond is negative)
+        spring_energy += -0.5 * ff * (delx2 * delx2 + dely2 * dely2 + delz2 * delz2);
     }
     xlast += 3;
     xnext += 3;
